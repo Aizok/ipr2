@@ -17,15 +17,14 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
 
 $path = explode('/', trim(parse_url($requestUri, PHP_URL_PATH), '/'));
-
 $apiIndex = array_search('api', $path);
 
 $entity = null;
 $id = null;
 
 if ($apiIndex !== false) {
-    $entity = $path[$apiIndex + 1] ?? null; 
-    $id = $path[$apiIndex + 2] ?? null;     
+    $entity = $path[$apiIndex + 1] ?? null;
+    $id = $path[$apiIndex + 2] ?? null;
 }
 
 if ($entity !== 'coupons') {
@@ -34,11 +33,25 @@ if ($entity !== 'coupons') {
     exit;
 }
 
+function getValidatedJsonInput() {
+    $rawInput = file_get_contents('php://input');
+    $input = json_decode($rawInput, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        http_response_code(400);
+        echo json_encode(["error" => "Invalid JSON format"]);
+        exit;
+    }
+
+    return $input;
+}
+
 switch ($requestMethod) {
     case 'GET':
         if ($id) {
             $data = $coupon->getById($id);
             if ($data) {
+                http_response_code(200);
                 echo json_encode($data);
             } else {
                 http_response_code(404);
@@ -47,20 +60,28 @@ switch ($requestMethod) {
         } else {
             $data = $coupon->getAll();
             if ($data) {
+                http_response_code(200);
                 echo json_encode($data);
             } else {
+                http_response_code(200);
                 echo json_encode(["message" => "No coupons found"]);
             }
         }
         break;
 
     case 'POST':
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (!$input || empty($input['code']) || !isset($input['discount_percent']) || empty($input['valid_until'])) {
+        $input = getValidatedJsonInput();
+
+        if (
+            empty($input['code']) ||
+            !isset($input['discount_percent']) ||
+            empty($input['valid_until'])
+        ) {
             http_response_code(400);
             echo json_encode(["error" => "Invalid input data"]);
             break;
         }
+
         if ($coupon->create($input)) {
             http_response_code(201);
             echo json_encode(["message" => "Coupon created successfully"]);
@@ -76,14 +97,22 @@ switch ($requestMethod) {
             echo json_encode(["error" => "Missing coupon ID"]);
             break;
         }
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (!$input || empty($input['code']) || !isset($input['discount_percent']) || empty($input['valid_until'])) {
+
+        $input = getValidatedJsonInput();
+
+        if (
+            empty($input['code']) ||
+            !isset($input['discount_percent']) ||
+            empty($input['valid_until'])
+        ) {
             http_response_code(400);
             echo json_encode(["error" => "Invalid input data"]);
             break;
         }
+
         $updated = $coupon->update($id, $input);
         if ($updated) {
+            http_response_code(200);
             echo json_encode(["message" => "Coupon updated successfully"]);
         } else {
             $exists = $coupon->getById($id);
@@ -103,8 +132,10 @@ switch ($requestMethod) {
             echo json_encode(["error" => "Missing coupon ID"]);
             break;
         }
+
         $deleted = $coupon->delete($id);
         if ($deleted) {
+            http_response_code(200);
             echo json_encode(["message" => "Coupon deleted successfully"]);
         } else {
             $exists = $coupon->getById($id);
